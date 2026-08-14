@@ -29,7 +29,8 @@ node scripts/smoke-verify.mjs smoke-out
 
 ## 打包产物
 
-- `dist/DSH-Desktop-Setup-<version>.exe` — 安装版(唯一交付形态)
+- `dist/v<version>/DSH-Desktop-Setup-<version>.exe` — 安装版(唯一交付形态)
+- 版本归档规则:每个版本的安装包放在独立的 `dist/vX.Y.Z/` 目录,旧版本保留不删除(构建配置 `directories.output: "dist/v${version}"` 自动归档)
 
 ## 说明
 

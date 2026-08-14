@@ -28,7 +28,7 @@
     "productName": "DeepSeek Harness Desktop",
     "asar": true,
     "directories": {
-      "output": "dist",
+      "output": "dist/v${version}",
       "buildResources": "build"
     },
     "files": [
