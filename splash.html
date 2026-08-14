@@ -94,7 +94,6 @@
     <div class="bar"><i id="bar"></i></div>
     <div class="chip" id="chip">dsh 引擎 · 等待连接</div>
     <div class="actions" id="actions">
-      <button id="btnTray" class="hidden">后台继续</button>
       <button id="btnRetry" class="hidden">重试</button>
     </div>
   </div>
@@ -128,18 +127,18 @@
     if (!s) return;
     var status = $('status');
     switch (s.stage) {
-      case 'detect': status.textContent = '正在检测本地服务'; setBar(null); hide('btnRetry'); hide('btnTray'); break;
+      case 'detect': status.textContent = '正在检测本地服务'; setBar(null); hide('btnRetry'); break;
       case 'install':
         status.textContent = s.detail || '首次启动,正在准备引擎(仅此一次)';
-        setBar(null); startTimer(); show('btnTray'); hide('btnRetry');
+        setBar(null); startTimer(); hide('btnRetry');
         break;
-      case 'start': status.textContent = s.detail || '正在启动服务'; setBar(null); startTimer(); show('btnTray'); hide('btnRetry'); break;
-      case 'wait': status.textContent = s.detail || '服务启动中,请稍候'; setBar(null); startTimer(); show('btnTray'); hide('btnRetry'); break;
+      case 'start': status.textContent = s.detail || '正在启动服务'; setBar(null); startTimer(); hide('btnRetry'); break;
+      case 'wait': status.textContent = s.detail || '服务启动中,请稍候'; setBar(null); startTimer(); hide('btnRetry'); break;
       case 'ready':
-        status.textContent = '准备就绪'; setBar(100); stopTimer(); hide('btnTray'); hide('btnRetry');
+        status.textContent = '准备就绪'; setBar(100); stopTimer(); hide('btnRetry');
         break;
       case 'error':
-        status.textContent = '启动失败'; setBar(0); stopTimer(); hide('btnTray'); show('btnRetry');
+        status.textContent = '启动失败'; setBar(0); stopTimer(); show('btnRetry');
         break;
       case 'hide': document.body.classList.add('fade'); break;
     }
@@ -153,9 +152,6 @@
     $('btnRetry').addEventListener('click', function () {
       hide('btnRetry'); $('status').textContent = '正在重试';
       api.retryBoot();
-    });
-    $('btnTray').addEventListener('click', function () {
-      hide('btnTray'); api.hideToTray();
     });
   }
 })();

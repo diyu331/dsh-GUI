@@ -34,7 +34,6 @@ let engineWin = null;
 let quitting = false;
 let server = null;
 let booting = false;
-let splashHidden = false;
 
 const smoke = { startedAt: Date.now(), logs: [] };
 function log(msg) {
@@ -204,9 +203,6 @@ let engineDialogTask = null;
 async function ready(port) {
   sendStatus('ready', { detail: `已就绪(端口 ${port})` });
   openMainWindow(port);
-  if (splashHidden) {
-    notify('DSH 桌面版已就绪', `服务已在后台启动(端口 ${port}),点击托盘图标或此处打开。`);
-  }
   if (!SMOKE) setTimeout(fadeSplash, 500);
   if (SMOKE) {
     // 烟雾模式:自动触发"检查引擎更新",验证弹窗状态
@@ -391,10 +387,6 @@ function registerIpc() {
     appVersion: app.getVersion(),
     dshVersion: server ? server.installedVersion() : null,
   }));
-  ipcMain.handle('dsh:hide-to-tray', () => {
-    splashHidden = true;
-    if (splashWin && !splashWin.isDestroyed()) splashWin.hide();
-  });
   ipcMain.handle('dsh:retry-boot', () => boot());
   ipcMain.handle('dsh:quit', () => app.quit());
   ipcMain.handle('dsh:engine-apply', (_e, v) => applyEngineUpdate(String(v || '')));
