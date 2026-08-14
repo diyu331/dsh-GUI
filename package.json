@@ -1,0 +1,66 @@
+{
+  "name": "dsh-desktop",
+  "productName": "DeepSeek Harness Desktop",
+  "version": "1.1.2",
+  "description": "DeepSeek Harness (DSH) 桌面客户端 —— 双击即用:DeepSeek 简约风黑鲸启动画面、DSH 服务自管理、托盘常驻、一键更新引擎",
+  "main": "main.js",
+  "author": "dsh-desktop",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "icons": "node scripts/make-icons.mjs",
+    "whale": "node scripts/make-whale-mark.mjs",
+    "runtime": "node scripts/prepare-runtime.mjs",
+    "smoke": "electron . --smoke",
+    "dist": "electron-builder --win portable nsis",
+    "dist:portable": "electron-builder --win portable"
+  },
+  "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "png-to-ico": "^2.1.8",
+    "pngjs": "^7.0.0"
+  },
+  "build": {
+    "appId": "com.deepseek.dsh-desktop",
+    "productName": "DeepSeek Harness Desktop",
+    "asar": true,
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "splash.html",
+      "engine-update.html",
+      "server-manager.js",
+      "engine-updater.js",
+      "assets/**/*"
+    ],
+    "extraResources": [
+      { "from": "build/runtime/node.exe", "to": "runtime/node.exe" },
+      { "from": "build/runtime/npm", "to": "runtime/npm" }
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false,
+      "target": [
+        { "target": "nsis", "arch": [ "x64" ] }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "DSH-Desktop-Setup-${version}.exe",
+      "shortcutName": "DeepSeek Harness Desktop",
+      "deleteAppDataOnUninstall": false,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
+    },
+    "npmRebuild": false
+  }
+}

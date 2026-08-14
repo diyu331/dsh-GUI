@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'self' 'unsafe-inline'">
+<title>引擎更新 - DeepSeek Harness</title>
+<style>
+  :root{
+    --ink:#111111; --sub:#8A94A6; --faint:#C2C9D4; --line:#E8EBF1; --blue:#4D6BFE;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;overflow:hidden;background:transparent;user-select:none;-webkit-user-select:none}
+  body{
+    border-radius:14px;background:#FFFFFF;border:1px solid rgba(17,17,17,.05);
+    box-shadow:0 24px 64px rgba(17,17,17,.10);
+    display:flex;flex-direction:column;padding:28px 32px;
+  }
+  .head{display:flex;align-items:center;gap:12px;margin-bottom:22px}
+  .mini{width:38px;height:38px;border-radius:50%;background:#F4F6FA;display:flex;align-items:center;justify-content:center}
+  .mini img{width:62%;height:62%}
+  .head h1{font-family:"Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;font-size:16px;font-weight:560;color:var(--ink)}
+  .head .sub{font-size:11px;color:var(--faint);margin-top:2px}
+
+  .body{flex:1;display:flex;flex-direction:column;gap:18px}
+  .ver-row{display:flex;align-items:center;justify-content:center;gap:16px;padding:10px 0}
+  .ver{text-align:center}
+  .ver .lbl{font-size:11px;color:var(--sub);margin-bottom:6px;letter-spacing:.05em}
+  .ver .num{font-family:"Cascadia Mono",Consolas,monospace;font-size:18px;color:var(--ink)}
+  .ver .num.new{color:var(--blue)}
+  .arrow{font-size:16px;color:var(--faint)}
+
+  .ptext{font-size:13px;color:var(--ink);text-align:center}
+  .ptext.dim{color:var(--sub)}
+  .bar{width:100%;height:2px;border-radius:1px;background:var(--line);overflow:hidden}
+  .bar i{display:block;height:100%;width:34%;border-radius:1px;background:var(--blue);animation:indet 1.6s ease-in-out infinite}
+  @keyframes indet{0%{transform:translateX(-120%)}100%{transform:translateX(360%)}}
+  .plog{font-family:"Cascadia Mono",Consolas,monospace;font-size:10.5px;line-height:1.7;color:var(--sub);
+    background:#FAFBFC;border:1px solid var(--line);border-radius:8px;padding:10px 12px;height:110px;overflow:auto;white-space:pre-wrap}
+
+  .foot{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
+  button{font-family:inherit;font-size:12.5px;cursor:pointer;border-radius:16px;padding:7px 22px;transition:all .18s;letter-spacing:.03em}
+  .ghost{background:transparent;border:1px solid var(--line);color:var(--sub)}
+  .ghost:hover{color:var(--ink);border-color:var(--faint)}
+  .primary{background:var(--blue);border:none;color:#fff;box-shadow:0 4px 14px rgba(77,107,254,.35)}
+  .primary:hover{filter:brightness(1.1)}
+  .hidden{display:none !important}
+</style>
+</head>
+<body>
+  <div class="head">
+    <div class="mini"><img src="assets/whale-mark.svg" alt=""></div>
+    <div>
+      <h1>引擎更新</h1>
+      <div class="sub">DeepSeek Harness Desktop</div>
+    </div>
+  </div>
+
+  <div class="body">
+    <div id="view-available" class="hidden">
+      <div class="ver-row">
+        <div class="ver"><div class="lbl">当前版本</div><div class="num" id="curVer">-</div></div>
+        <div class="arrow">→</div>
+        <div class="ver"><div class="lbl">新版本</div><div class="num new" id="newVer">-</div></div>
+      </div>
+      <div class="ptext dim">点击「立即更新」将自动安装并重启服务,期间约 1~3 分钟。</div>
+    </div>
+
+    <div id="view-uptodate" class="hidden" style="text-align:center;padding-top:26px">
+      <div class="ptext" id="upText">引擎已是最新版本</div>
+      <div class="ver-row"><div class="ver"><div class="num" id="upVer" style="color:var(--ink)">-</div></div></div>
+    </div>
+
+    <div id="view-updating" class="hidden">
+      <div class="ptext" id="phaseText">正在更新引擎…</div>
+      <div class="bar" style="margin-top:12px"><i></i></div>
+      <div class="plog" id="plog" style="margin-top:14px">…</div>
+    </div>
+
+    <div id="view-done" class="hidden" style="text-align:center;padding-top:20px">
+      <div class="ptext" id="doneText">已更新完成</div>
+    </div>
+
+    <div id="view-error" class="hidden">
+      <div class="ptext" id="errText">更新失败</div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <button class="ghost" id="btnLater">稍后</button>
+    <button class="primary hidden" id="btnUpdate">立即更新</button>
+    <button class="ghost hidden" id="btnDone">完成</button>
+  </div>
+
+<script>
+(function () {
+  var api = window.dshDesktop;
+  function $(id){ return document.getElementById(id); }
+  var state = null;
+
+  function showView(id, buttons) {
+    ['view-available','view-uptodate','view-updating','view-done','view-error'].forEach(function (v) {
+      $(v).classList.toggle('hidden', v !== id);
+    });
+    $('btnLater').classList.toggle('hidden', buttons !== 'later');
+    $('btnUpdate').classList.toggle('hidden', buttons !== 'update');
+    $('btnDone').classList.toggle('hidden', buttons !== 'done');
+  }
+
+  function renderState(s) {
+    if (!s) return;
+    state = s;
+    if (s.updateAvailable) {
+      $('curVer').textContent = 'v' + s.current;
+      $('newVer').textContent = 'v' + s.latest;
+      showView('view-available', 'update');
+    } else {
+      $('upText').textContent = '引擎已是最新版本';
+      $('upVer').textContent = 'v' + (s.current || s.latest || '');
+      showView('view-uptodate', 'done');
+    }
+  }
+
+  function addLog(line) {
+    var log = $('plog');
+    var lines = (log.textContent + '\n' + line).split('\n').slice(-6);
+    log.textContent = lines.join('\n');
+    log.scrollTop = log.scrollHeight;
+  }
+
+  if (api) {
+    api.onUpdateEvent(function (e) {
+      if (!e) return;
+      if (e.type === 'state') { renderState(e.state); return; }
+      if (e.type === 'npm') { addLog(e.line); return; }
+      if (e.type === 'phase') {
+        if (e.phase === 'stopping') { showView('view-updating', null); $('phaseText').textContent = '正在停止旧服务…'; }
+        else if (e.phase === 'installing') { showView('view-updating', null); $('phaseText').textContent = '正在下载并安装 v' + (e.version || '') + '…'; }
+        else if (e.phase === 'restarting') { showView('view-updating', null); $('phaseText').textContent = '正在重启服务…'; }
+        else if (e.phase === 'done') { showView('view-done', 'done'); $('doneText').textContent = '已更新到 v' + (e.version || '') + ',服务已自动重启'; }
+        else if (e.phase === 'error') { showView('view-error', 'later'); $('errText').textContent = e.message || '更新失败'; }
+      }
+    });
+
+    $('btnUpdate').addEventListener('click', function () {
+      if (state && state.latest) api.engineApply(state.latest);
+      $('btnUpdate').disabled = true;
+    });
+    $('btnLater').addEventListener('click', function () { window.close(); });
+    $('btnDone').addEventListener('click', function () { window.close(); });
+  }
+})();
+</script>
+</body>
+</html>

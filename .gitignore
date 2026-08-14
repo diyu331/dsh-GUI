@@ -1,0 +1,12 @@
+# 依赖与构建产物
+node_modules/
+dist/
+build/runtime/
+
+# 测试/调试产物
+smoke-*/
+*.log
+*.bak*
+
+# 本地工具
+.tools/

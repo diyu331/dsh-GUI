@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'self' 'unsafe-inline'">
+<title>DeepSeek Harness</title>
+<style>
+  :root{
+    --whale:#0A0A0A;
+    --ink:#111111;
+    --sub:#8A94A6;
+    --faint:#C2C9D4;
+    --line:#E8EBF1;
+    --blue:#4D6BFE;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;overflow:hidden;background:transparent;user-select:none;-webkit-user-select:none;cursor:default}
+  body{
+    border-radius:14px;
+    background:#FFFFFF;
+    border:1px solid rgba(17,17,17,.05);
+    box-shadow:0 24px 64px rgba(17,17,17,.10);
+    -webkit-app-region:drag;
+    display:flex;align-items:center;justify-content:center;
+    position:relative;
+    transition:opacity .32s ease, transform .32s ease;
+  }
+  body.fade{opacity:0;transform:scale(.98)}
+
+  .stage{display:flex;flex-direction:column;align-items:center;gap:0;width:100%;padding:0 48px}
+
+  /* 鲸鱼:极简浮动 + 呼吸 */
+  .scene{position:relative;width:150px;height:150px;margin-bottom:34px;animation:float 5.2s ease-in-out infinite}
+  .whale{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;animation:breath 5.2s ease-in-out infinite}
+  .whale img{width:88%;height:88%}
+  .ring{
+    position:absolute;inset:14px;border-radius:50%;
+    border:1px solid rgba(77,107,254,.16);
+    opacity:0;animation:sonar 3.6s ease-out infinite;
+    pointer-events:none;
+  }
+  @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+  @keyframes breath{0%,100%{transform:scale(1)}50%{transform:scale(1.02)}}
+  @keyframes sonar{0%{transform:scale(.96);opacity:.55}100%{transform:scale(1.42);opacity:0}}
+
+  /* 字标:DeepSeek 式排版,紧凑、克制的入场 */
+  .wordmark{
+    font-family:"Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;
+    font-weight:520;font-size:20px;letter-spacing:.02em;color:var(--ink);
+    animation:rise .6s ease both;
+  }
+  .wordmark em{font-style:normal;font-weight:320;color:var(--sub)}
+  @keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  .status{
+    margin-top:14px;font-size:12.5px;letter-spacing:.03em;color:var(--sub);
+    min-height:18px;text-align:center;transition:opacity .2s;
+  }
+  .elapsed{font-family:"Cascadia Mono",Consolas,monospace;font-size:10.5px;color:var(--faint);min-height:14px;margin-top:2px}
+
+  /* 发丝级进度线 */
+  .bar{width:200px;height:1.5px;border-radius:1px;background:var(--line);overflow:hidden;margin-top:20px}
+  .bar i{display:block;height:100%;width:0;border-radius:1px;background:var(--blue);transition:width .5s ease}
+  .bar i.indet{width:34%;transition:none;animation:indet 1.6s ease-in-out infinite}
+  @keyframes indet{0%{transform:translateX(-120%)}100%{transform:translateX(360%)}}
+
+  .chip{font-family:"Cascadia Mono",Consolas,monospace;font-size:10.5px;letter-spacing:.06em;color:var(--faint);margin-top:16px}
+
+  /* 操作按钮:极简幽灵风 */
+  .actions{margin-top:18px;display:flex;gap:10px;min-height:30px}
+  .actions button{
+    -webkit-app-region:no-drag;
+    font-family:inherit;font-size:12px;letter-spacing:.04em;color:var(--sub);
+    background:transparent;border:1px solid var(--line);border-radius:16px;
+    padding:5px 18px;cursor:pointer;transition:all .18s;
+  }
+  .actions button:hover{color:var(--blue);border-color:rgba(77,107,254,.4)}
+
+  @media (prefers-reduced-motion: reduce){
+    .scene,.whale,.ring,.bar i.indet{animation:none !important}
+    .wordmark{animation:none}
+  }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div class="scene">
+      <div class="ring"></div>
+      <div class="whale"><img src="assets/whale-mark.svg" alt="DeepSeek Harness" draggable="false"></div>
+    </div>
+    <div class="wordmark">DeepSeek <em>Harness</em></div>
+    <div class="status" id="status">正在启动</div>
+    <div class="elapsed" id="elapsed"></div>
+    <div class="bar"><i id="bar"></i></div>
+    <div class="chip" id="chip">dsh 引擎 · 等待连接</div>
+    <div class="actions" id="actions">
+      <button id="btnTray" class="hidden">后台继续</button>
+      <button id="btnRetry" class="hidden">重试</button>
+    </div>
+  </div>
+
+<script>
+(function () {
+  var api = window.dshDesktop;
+  function $(id){ return document.getElementById(id); }
+  function hide(id){ $(id).classList.add('hidden'); }
+  function show(id){ $(id).classList.remove('hidden'); }
+
+  var timerId = 0;
+  function startTimer() {
+    if (timerId) return;
+    var t0 = Date.now();
+    timerId = setInterval(function () {
+      var s = Math.floor((Date.now() - t0) / 1000);
+      $('elapsed').textContent = '已等待 ' + String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+    }, 1000);
+  }
+  function stopTimer() { if (timerId) { clearInterval(timerId); timerId = 0; } $('elapsed').textContent = ''; }
+
+  function setBar(pct) {
+    var bar = $('bar');
+    if (pct == null) { bar.classList.add('indet'); return; }
+    bar.classList.remove('indet');
+    bar.style.width = Math.max(4, Math.min(100, pct)) + '%';
+  }
+
+  function applyStatus(s) {
+    if (!s) return;
+    var status = $('status');
+    switch (s.stage) {
+      case 'detect': status.textContent = '正在检测本地服务'; setBar(null); hide('btnRetry'); hide('btnTray'); break;
+      case 'install':
+        status.textContent = s.detail || '首次启动,正在准备引擎(仅此一次)';
+        setBar(null); startTimer(); show('btnTray'); hide('btnRetry');
+        break;
+      case 'start': status.textContent = s.detail || '正在启动服务'; setBar(null); startTimer(); show('btnTray'); hide('btnRetry'); break;
+      case 'wait': status.textContent = s.detail || '服务启动中,请稍候'; setBar(null); startTimer(); show('btnTray'); hide('btnRetry'); break;
+      case 'ready':
+        status.textContent = '准备就绪'; setBar(100); stopTimer(); hide('btnTray'); hide('btnRetry');
+        break;
+      case 'error':
+        status.textContent = '启动失败'; setBar(0); stopTimer(); hide('btnTray'); show('btnRetry');
+        break;
+      case 'hide': document.body.classList.add('fade'); break;
+    }
+  }
+
+  if (api) {
+    api.onStatus(applyStatus);
+    api.getBootstrap().then(function (b) {
+      if (b && b.dshVersion) $('chip').textContent = 'dsh 引擎 v' + b.dshVersion;
+    }).catch(function () {});
+    $('btnRetry').addEventListener('click', function () {
+      hide('btnRetry'); $('status').textContent = '正在重试';
+      api.retryBoot();
+    });
+    $('btnTray').addEventListener('click', function () {
+      hide('btnTray'); api.hideToTray();
+    });
+  }
+})();
+</script>
+</body>
+</html>
