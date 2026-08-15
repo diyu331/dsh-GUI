@@ -233,13 +233,58 @@ class ServerManager {
     return { port: null, reused: false };
   }
 
+  /**
+   * 注入桌面版内置插件(dsh-wallpaper 氛围壁纸):
+   *  - 把安装包资源里的插件包复制到 web profile 的 node_modules(幂等,带版本更新)
+   *  - 通过 --patch 指向资源里的 wallpaper.patch.yml,【不改动用户的 cordis.patch.yml】
+   *    (保住 mcp-vision 的 ZHIPU_API_KEY ?? '' 兜底铁律)
+   * 隐私:插件包不含任何照片数据;照片路径由用户本地配置并持久化,朋友拿到后无照片自动纯白。
+   * @returns {string|null} --patch 参数值(无资源时返回 null)
+   */
+  ensureWallpaperPlugin() {
+    try {
+      if (!this.resourcesPath) return null;
+      const pluginDir = path.join(this.resourcesPath, 'plugins', 'dsh-wallpaper');
+      if (!fs.existsSync(path.join(pluginDir, 'package.json'))) return null;
+      // 插件解析锚点是 profile 目录(cordis loader 从 profile 目录 import 插件名),
+      // 所以复制到 profile 的 node_modules(与 dsh-vision-settings 的 junction 先例一致)。
+      const dshHome = process.env.DSH_HOME || path.join(os.homedir(), '.dsh');
+      const profileDir = path.join(dshHome, 'profiles', 'web');
+      const dest = path.join(profileDir, 'node_modules', 'dsh-wallpaper');
+      const srcVer = JSON.parse(fs.readFileSync(path.join(pluginDir, 'package.json'), 'utf8')).version;
+      let needCopy = true;
+      try {
+        const destVer = JSON.parse(fs.readFileSync(path.join(dest, 'package.json'), 'utf8')).version;
+        needCopy = destVer !== srcVer;
+      } catch { needCopy = true; }
+      if (needCopy) {
+        fs.mkdirSync(path.dirname(dest), { recursive: true });
+        fs.rmSync(dest, { recursive: true, force: true });
+        fs.cpSync(pluginDir, dest, { recursive: true });
+        this.log(`壁纸插件 dsh-wallpaper@${srcVer} 已注入 profile (${profileDir})`);
+      }
+      const patchFile = path.join(this.resourcesPath, 'wallpaper.patch.yml');
+      return fs.existsSync(patchFile) ? patchFile : null;
+    } catch (err) {
+      this.log('壁纸插件注入失败(不影响启动): ' + err.message);
+      return null;
+    }
+  }
+
   /** 启动服务(仅当端口空闲时由外部调用) */
   start({ port }) {
     const node = this.resolveNodeExe();
     const entry = this.dshEntry();
     if (!fs.existsSync(entry)) throw new Error('DSH 引擎未安装: ' + entry);
-    this.log(`启动 DSH 服务: ${node} ${entry} web --port ${port}`);
-    const child = spawn(node, [entry, 'web', '--port', String(port)], {
+    const args = [entry, 'web', '--port', String(port)];
+    const wallpaperPatch = this.ensureWallpaperPlugin();
+    if (wallpaperPatch) {
+      // --patch 必须放在 --port 之前:--port 是透传给 app 的未知选项,
+      // 出现在它后面的 launcher 选项会被 app 当作自己的参数而报 unknown option。
+      args.splice(2, 0, '--patch', wallpaperPatch);
+    }
+    this.log(`启动 DSH 服务: ${node} ${args.join(' ')}`);
+    const child = spawn(node, args, {
       cwd: this.serverDir,
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],

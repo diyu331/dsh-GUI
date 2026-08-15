@@ -1,0 +1,7 @@
+# 桌面版内置：氛围壁纸插件（dsh-wallpaper）
+# 隐私说明：本插件【不含任何照片数据】。照片路径由每个用户通过设置页本地配置，
+# 持久化在各自机器的 settings.yaml 中；未配置图片时界面保持纯白，无感无痕。
+# 该 patch 由桌面版 ServerManager 在托管启动时通过 --patch 注入，不修改用户的 cordis.patch.yml。
+- insert:
+    - id: dsh-wallpaper
+      name: dsh-wallpaper
