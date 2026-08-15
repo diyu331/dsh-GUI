@@ -236,18 +236,18 @@ class ServerManager {
   /**
    * 注入桌面版内置插件(dsh-wallpaper 氛围壁纸):
    *  - 把安装包资源里的插件包复制到 web profile 的 node_modules(幂等,带版本更新)
-   *  - 若 profile 的 cordis.patch.yml 已含 dsh-wallpaper 行(用户手动配置,cmd 直接跑也要有),
-   *    则不再传 --patch,避免同一插件行重复注入导致 settings namespace 重复注册;
-   *  - 否则通过 --patch 指向资源里的 wallpaper.patch.yml(首次/旧用户自动注入),
-   *    【不改动用户的 cordis.patch.yml】(保住 mcp-vision 的 ZHIPU_API_KEY ?? '' 兜底铁律)
+   *  - 幂等地把 dsh-wallpaper 插件行写入 profile 的 cordis.patch.yml
+   *    (与用户手动配置的方式一致;cmd `dsh web` 直接启动时也会加载壁纸)
+   *  - 保留用户 cordis.patch.yml 中的其他内容(mcp-vision 的 ZHIPU_API_KEY ?? '' 兜底铁律)
+   * 统一走 profile 层注入,不再使用 --patch,避免同一插件行重复注入
+   * 导致 "duplicate loader entry id: dsh-wallpaper" 崩溃。
    * 隐私:插件包不含任何照片数据;照片路径由用户本地配置并持久化,朋友拿到后无照片自动纯白。
-   * @returns {string|null} --patch 参数值(无资源或已由 profile 层提供时返回 null)
    */
   ensureWallpaperPlugin() {
     try {
-      if (!this.resourcesPath) return null;
+      if (!this.resourcesPath) return;
       const pluginDir = path.join(this.resourcesPath, 'plugins', 'dsh-wallpaper');
-      if (!fs.existsSync(path.join(pluginDir, 'package.json'))) return null;
+      if (!fs.existsSync(path.join(pluginDir, 'package.json'))) return;
       // 插件解析锚点是 profile 目录(cordis loader 从 profile 目录 import 插件名),
       // 所以复制到 profile 的 node_modules(与 dsh-vision-settings 的 junction 先例一致)。
       const dshHome = process.env.DSH_HOME || path.join(os.homedir(), '.dsh');
@@ -265,21 +265,17 @@ class ServerManager {
         fs.cpSync(pluginDir, dest, { recursive: true });
         this.log(`壁纸插件 dsh-wallpaper@${srcVer} 已注入 profile (${profileDir})`);
       }
-      // 若用户已在 profile 层配置了 dsh-wallpaper(cmd 直接跑也要用的场景),
-      // 不再叠加 --patch,避免同一插件行注入两次。
+      // 幂等地把 dsh-wallpaper 行写入 profile 的 cordis.patch.yml(如不存在)。
       const userPatch = path.join(profileDir, 'cordis.patch.yml');
-      if (fs.existsSync(userPatch)) {
-        const text = fs.readFileSync(userPatch, 'utf8');
-        if (/^\s*-\s*id:\s*dsh-wallpaper\s*$/m.test(text)) {
-          this.log('壁纸插件已由 profile 的 cordis.patch.yml 提供,跳过 --patch');
-          return null;
-        }
+      const already = fs.existsSync(userPatch) && /^\s*-\s*id:\s*dsh-wallpaper\s*$/m.test(fs.readFileSync(userPatch, 'utf8'));
+      if (!already) {
+        const line = "\n# 氛围壁纸插件(dsh-wallpaper):由桌面版自动注入。隐私:不含照片数据,路径用户本地配置。\n- insert:\n    - id: dsh-wallpaper\n      name: dsh-wallpaper\n";
+        fs.mkdirSync(profileDir, { recursive: true });
+        fs.appendFileSync(userPatch, line, 'utf8');
+        this.log(`壁纸插件行已写入 profile cordis.patch.yml`);
       }
-      const patchFile = path.join(this.resourcesPath, 'wallpaper.patch.yml');
-      return fs.existsSync(patchFile) ? patchFile : null;
     } catch (err) {
       this.log('壁纸插件注入失败(不影响启动): ' + err.message);
-      return null;
     }
   }
 
@@ -288,13 +284,10 @@ class ServerManager {
     const node = this.resolveNodeExe();
     const entry = this.dshEntry();
     if (!fs.existsSync(entry)) throw new Error('DSH 引擎未安装: ' + entry);
+    // 注入壁纸插件:统一写入 profile 的 cordis.patch.yml(与 cmd 一致),不使用 --patch,
+    // 避免同一插件行重复注入导致 "duplicate loader entry id: dsh-wallpaper" 崩溃。
+    this.ensureWallpaperPlugin();
     const args = [entry, 'web', '--port', String(port)];
-    const wallpaperPatch = this.ensureWallpaperPlugin();
-    if (wallpaperPatch) {
-      // --patch 必须放在 --port 之前:--port 是透传给 app 的未知选项,
-      // 出现在它后面的 launcher 选项会被 app 当作自己的参数而报 unknown option。
-      args.splice(2, 0, '--patch', wallpaperPatch);
-    }
     this.log(`启动 DSH 服务: ${node} ${args.join(' ')}`);
     const child = spawn(node, args, {
       cwd: this.serverDir,
