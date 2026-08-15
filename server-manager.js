@@ -236,10 +236,12 @@ class ServerManager {
   /**
    * 注入桌面版内置插件(dsh-wallpaper 氛围壁纸):
    *  - 把安装包资源里的插件包复制到 web profile 的 node_modules(幂等,带版本更新)
-   *  - 通过 --patch 指向资源里的 wallpaper.patch.yml,【不改动用户的 cordis.patch.yml】
-   *    (保住 mcp-vision 的 ZHIPU_API_KEY ?? '' 兜底铁律)
+   *  - 若 profile 的 cordis.patch.yml 已含 dsh-wallpaper 行(用户手动配置,cmd 直接跑也要有),
+   *    则不再传 --patch,避免同一插件行重复注入导致 settings namespace 重复注册;
+   *  - 否则通过 --patch 指向资源里的 wallpaper.patch.yml(首次/旧用户自动注入),
+   *    【不改动用户的 cordis.patch.yml】(保住 mcp-vision 的 ZHIPU_API_KEY ?? '' 兜底铁律)
    * 隐私:插件包不含任何照片数据;照片路径由用户本地配置并持久化,朋友拿到后无照片自动纯白。
-   * @returns {string|null} --patch 参数值(无资源时返回 null)
+   * @returns {string|null} --patch 参数值(无资源或已由 profile 层提供时返回 null)
    */
   ensureWallpaperPlugin() {
     try {
@@ -262,6 +264,16 @@ class ServerManager {
         fs.rmSync(dest, { recursive: true, force: true });
         fs.cpSync(pluginDir, dest, { recursive: true });
         this.log(`壁纸插件 dsh-wallpaper@${srcVer} 已注入 profile (${profileDir})`);
+      }
+      // 若用户已在 profile 层配置了 dsh-wallpaper(cmd 直接跑也要用的场景),
+      // 不再叠加 --patch,避免同一插件行注入两次。
+      const userPatch = path.join(profileDir, 'cordis.patch.yml');
+      if (fs.existsSync(userPatch)) {
+        const text = fs.readFileSync(userPatch, 'utf8');
+        if (/^\s*-\s*id:\s*dsh-wallpaper\s*$/m.test(text)) {
+          this.log('壁纸插件已由 profile 的 cordis.patch.yml 提供,跳过 --patch');
+          return null;
+        }
       }
       const patchFile = path.join(this.resourcesPath, 'wallpaper.patch.yml');
       return fs.existsSync(patchFile) ? patchFile : null;
